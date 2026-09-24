@@ -1,0 +1,941 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Interactive SVG Maze Generator</title>
+  
+  <!-- Tailwind CSS for modern layout -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <!-- Google Fonts (Inter & Outfit) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=Outfit:wght@500;700;800&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --font-heading: 'Outfit', sans-serif;
+      --font-body: 'Inter', sans-serif;
+      
+      /* Default Theme Variables */
+      --maze-bg-color: #2a1b40;
+      --maze-stroke-color: #1e132d;
+      --maze-path-color: #ffffff;
+      --accent-color: #8b5cf6;
+      --accent-hover: #7c3aed;
+      --player-color: #f59e0b;
+      --solution-color: #10b981;
+    }
+
+    body {
+      font-family: var(--font-body);
+      background-color: #0f172a;
+      color: #f8fafc;
+      min-height: 100vh;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      overflow-x: hidden;
+    }
+
+    h1, h2, h3, .font-heading {
+      font-family: var(--font-heading);
+    }
+
+    /* Glassmorphism Styling */
+    .glass-panel {
+      background: rgba(30, 41, 59, 0.7);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 8px 10px -6px rgba(0, 0, 0, 0.3);
+    }
+
+    /* SVG Maze Styling based on original concept */
+    svg.maze-svg {
+      background: var(--maze-bg-color);
+      border-radius: 12px;
+      transition: background-color 0.3s ease;
+      max-height: 70vh;
+      max-width: 100%;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    }
+
+    svg .grid-line {
+      fill: none;
+      stroke: var(--maze-stroke-color);
+      stroke-linecap: square;
+      transition: stroke 0.3s ease;
+    }
+
+    svg .maze-path {
+      fill: none;
+      stroke: var(--maze-path-color);
+      stroke-linecap: square;
+      transition: stroke 0.3s ease;
+    }
+
+    svg .maze-path.main {
+      stroke: var(--maze-path-color);
+    }
+
+    svg .maze-path.branch {
+      stroke: var(--maze-path-color);
+      opacity: 0.95;
+    }
+
+    svg .solution-path {
+      fill: none;
+      stroke: var(--solution-color);
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      opacity: 0.85;
+      animation: pulse-line 2s infinite ease-in-out;
+    }
+
+    @keyframes pulse-line {
+      0%, 100% { opacity: 0.85; }
+      50% { opacity: 0.5; }
+    }
+
+    /* Player Marker Animation */
+    .player-marker {
+      fill: var(--player-color);
+      transition: all 0.12s ease-out;
+      filter: drop-shadow(0px 0px 8px var(--player-color));
+    }
+
+    .start-marker {
+      fill: #10b981;
+      filter: drop-shadow(0px 0px 6px #10b981);
+    }
+
+    .end-marker {
+      fill: #ef4444;
+      filter: drop-shadow(0px 0px 6px #ef4444);
+    }
+
+    /* Custom Scrollbars */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #0f172a;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #334155;
+      border-radius: 3px;
+    }
+
+    /* Button Animations */
+    .btn-action {
+      transition: all 0.2s ease;
+    }
+    .btn-action:hover:not(:disabled) {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+    }
+    .btn-action:active:not(:disabled) {
+      transform: translateY(0);
+    }
+
+    /* Toast Overlay */
+    #toast {
+      transition: opacity 0.3s ease, transform 0.3s ease;
+    }
+  </style>
+</head>
+<body class="p-4 md:p-8 flex flex-col items-center justify-between min-h-screen">
+
+  <header class="w-full max-w-6xl mb-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+    <div class="flex items-center gap-3">
+      <div class="p-3 bg-purple-600/20 border border-purple-500/30 rounded-xl text-purple-400 text-2xl">
+        <i class="fa-solid fa-network-wired"></i>
+      </div>
+      <div>
+        <h1 class="text-2xl sm:text-3xl font-extrabold tracking-tight bg-gradient-to-r from-purple-400 via-pink-400 to-indigo-400 bg-clip-text text-transparent">
+          SVG Maze Generator & Solver
+        </h1>
+        <p class="text-xs sm:text-sm text-slate-400">Procedural Path Algorithm with Interactive Navigation</p>
+      </div>
+    </div>
+    
+    <div class="flex items-center gap-2 text-xs text-slate-400 bg-slate-800/80 px-4 py-2 rounded-full border border-slate-700">
+      <span class="inline-block w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+      <span id="statusText">Ready</span>
+    </div>
+  </header>
+
+  <main class="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-12 gap-6 items-start flex-1">
+    
+    <!-- Controls Sidebar (4 cols) -->
+    <section class="lg:col-span-4 flex flex-col gap-5 glass-panel p-5 rounded-2xl">
+      
+      <!-- Action Buttons -->
+      <div class="grid grid-cols-2 gap-3">
+        <button id="btnGenerate" class="btn-action col-span-1 bg-purple-600 hover:bg-purple-500 text-white font-semibold py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-purple-900/30">
+          <i class="fa-solid fa-arrows-rotate"></i>
+          <span>Generate</span>
+        </button>
+        
+        <button id="btnSolve" class="btn-action col-span-1 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/30">
+          <i class="fa-solid fa-wand-magic-sparkles"></i>
+          <span>Solve (A*)</span>
+        </button>
+      </div>
+
+      <hr class="border-slate-700/60">
+
+      <!-- Parameters Controls -->
+      <div class="space-y-4">
+        <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400">Maze Settings</h3>
+
+        <!-- Maze Size Slider -->
+        <div>
+          <div class="flex justify-between text-sm mb-1">
+            <label for="sliderSize" class="text-slate-300 font-medium">Grid Size</label>
+            <span id="valSize" class="text-purple-400 font-bold">15 x 15</span>
+          </div>
+          <input type="range" id="sliderSize" min="8" max="30" value="15" step="1" 
+                 class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-purple-500">
+        </div>
+
+        <!-- Animation Speed Slider -->
+        <div>
+          <div class="flex justify-between text-sm mb-1">
+            <label for="sliderSpeed" class="text-slate-300 font-medium">Animation Speed</label>
+            <span id="valSpeed" class="text-purple-400 font-bold">Fast</span>
+          </div>
+          <input type="range" id="sliderSpeed" min="1" max="100" value="75" 
+                 class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-purple-500">
+        </div>
+
+        <!-- Branching Chance Slider -->
+        <div>
+          <div class="flex justify-between text-sm mb-1">
+            <label for="sliderBranch" class="text-slate-300 font-medium">Branch Density</label>
+            <span id="valBranch" class="text-purple-400 font-bold">20%</span>
+          </div>
+          <input type="range" id="sliderBranch" min="5" max="50" value="20" step="5"
+                 class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-purple-500">
+        </div>
+
+        <!-- Color Theme Select -->
+        <div>
+          <label for="selectTheme" class="block text-sm text-slate-300 font-medium mb-1">Color Palette</label>
+          <select id="selectTheme" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-purple-500">
+            <option value="cyberpunk">Cyberpunk Purple (Default)</option>
+            <option value="midnight">Midnight Blue</option>
+            <option value="forest">Emerald Forest</option>
+            <option value="monochrome">Dark Slate High-Contrast</option>
+            <option value="sunset">Sunset Neon</option>
+          </select>
+        </div>
+      </div>
+
+      <hr class="border-slate-700/60">
+
+      <!-- Interactive Game Controls Info -->
+      <div class="space-y-3">
+        <div class="flex justify-between items-center">
+          <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400">Interactive Mode</h3>
+          <span class="text-xs text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded border border-amber-400/20">Active</span>
+        </div>
+        
+        <p class="text-xs text-slate-400 leading-relaxed">
+          Navigate from the <span class="text-emerald-400 font-semibold">Green Start</span> to the <span class="text-red-400 font-semibold">Red Exit</span> using Arrow Keys / WASD or the buttons below.
+        </p>
+
+        <!-- On-Screen D-Pad Controls for Touch / Mobile -->
+        <div class="grid grid-cols-3 gap-1.5 w-36 mx-auto pt-2">
+          <div></div>
+          <button id="btnUp" class="btn-action bg-slate-700 hover:bg-slate-600 text-slate-200 p-2.5 rounded-lg flex items-center justify-center">
+            <i class="fa-solid fa-chevron-up"></i>
+          </button>
+          <div></div>
+          <button id="btnLeft" class="btn-action bg-slate-700 hover:bg-slate-600 text-slate-200 p-2.5 rounded-lg flex items-center justify-center">
+            <i class="fa-solid fa-chevron-left"></i>
+          </button>
+          <button id="btnDown" class="btn-action bg-slate-700 hover:bg-slate-600 text-slate-200 p-2.5 rounded-lg flex items-center justify-center">
+            <i class="fa-solid fa-chevron-down"></i>
+          </button>
+          <button id="btnRight" class="btn-action bg-slate-700 hover:bg-slate-600 text-slate-200 p-2.5 rounded-lg flex items-center justify-center">
+            <i class="fa-solid fa-chevron-right"></i>
+          </button>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- Maze Display Viewport (8 cols) -->
+    <section class="lg:col-span-8 flex flex-col items-center justify-center glass-panel p-4 sm:p-6 rounded-2xl relative min-h-[450px]">
+      
+      <!-- SVG Render Area -->
+      <div id="svgContainer" class="w-full flex items-center justify-center overflow-auto">
+        <svg id="mazeSvg" class="maze-svg" viewBox="0 0 1000 1000" role="img" aria-label="A generated square maze">
+          <title>A square maze</title>
+          
+          <style id="svgInternalStyles">
+            g {
+              --cell-size: 50px;
+              --stroke-width: 8px;
+            }
+          </style>
+
+          <!-- Grid Background lines -->
+          <g class="grid"></g>
+          
+          <!-- Maze Generated Passages -->
+          <g class="pattern"></g>
+          
+          <!-- Solution Path Overlay -->
+          <g class="solution-layer"></g>
+
+          <!-- Start, End, Player Elements -->
+          <g class="markers-layer"></g>
+        </svg>
+      </div>
+
+      <!-- Toast Notification Alert -->
+      <div id="toast" class="absolute top-8 left-1/2 -translate-x-1/2 pointer-events-none opacity-0 translate-y-[-10px] bg-slate-900/90 text-white border border-purple-500/50 px-5 py-2.5 rounded-xl shadow-2xl flex items-center gap-3 backdrop-blur-md z-20">
+        <i id="toastIcon" class="fa-solid fa-circle-check text-emerald-400 text-lg"></i>
+        <span id="toastMsg" class="text-sm font-medium">Maze Generated Successfully!</span>
+      </div>
+
+    </section>
+
+  </main>
+
+  <footer class="w-full max-w-6xl mt-6 text-center text-xs text-slate-500 py-2">
+    Interactive Procedural SVG Maze Visualizer &bull; Built with Pure JS & SVG Graphics
+  </footer>
+
+  <script>
+    /* ==========================================================================
+       1. RANDOMNESS HELPERS (Pure JS Implementation)
+       ========================================================================== */
+    const Random = {
+      // Return random integer between min (inclusive) and max (inclusive)
+      int(min, max) {
+        return Math.floor(Math.random() * (max - min + 1)) + min;
+      },
+      // Pick random item from an array
+      item(array) {
+        if (!array || array.length === 0) return undefined;
+        return array[Math.floor(Math.random() * array.length)];
+      },
+      // Return true based on probability percentage (0 to 1)
+      chance(probability) {
+        return Math.random() < probability;
+      }
+    };
+
+    /* ==========================================================================
+       2. COLOR PALETTES & THEMES
+       ========================================================================== */
+    const THEMES = {
+      cyberpunk: {
+        bg: '#2a1b40',
+        stroke: '#1e132d',
+        path: '#ffffff',
+        player: '#f59e0b',
+        solution: '#10b981'
+      },
+      midnight: {
+        bg: '#0f172a',
+        stroke: '#1e293b',
+        path: '#e2e8f0',
+        player: '#38bdf8',
+        solution: '#f43f5e'
+      },
+      forest: {
+        bg: '#064e3b',
+        stroke: '#022c22',
+        path: '#ecfdf5',
+        player: '#facc15',
+        solution: '#a855f7'
+      },
+      monochrome: {
+        bg: '#18181b',
+        stroke: '#27272a',
+        path: '#f4f4f5',
+        player: '#3b82f6',
+        solution: '#eab308'
+      },
+      sunset: {
+        bg: '#451a03',
+        stroke: '#290e02',
+        path: '#fff7ed',
+        player: '#22c55e',
+        solution: '#ec4899'
+      }
+    };
+
+    /* ==========================================================================
+       3. STATE MANAGEMENT & GLOBALS
+       ========================================================================== */
+    const state = {
+      gridWidth: 15,
+      gridHeight: 15,
+      scale: 50, // cell dimension in px
+      strokeWidth: 8,
+      splittingChance: 0.20,
+      animationSpeedMs: 25, // Delay per step
+      retryLimit: 30,
+      
+      // Algorithm Runtime State
+      gridData: [],
+      mainPathPoints: [],
+      otherPaths: [],
+      failedCount: 0,
+      intervalId: null,
+      isGenerating: false,
+      isSolving: false,
+
+      // Game state
+      startPoint: { x: 0, y: 0 },
+      endPoint: { x: 14, y: 14 },
+      playerPos: { x: 0, y: 0 },
+      solutionPath: [],
+      isGameWon: false
+    };
+
+    /* ==========================================================================
+       4. DOM ELEMENTS
+       ========================================================================== */
+    const dom = {
+      svg: document.getElementById('mazeSvg'),
+      gridGroup: document.querySelector('svg .grid'),
+      patternGroup: document.querySelector('svg .pattern'),
+      solutionGroup: document.querySelector('svg .solution-layer'),
+      markersGroup: document.querySelector('svg .markers-layer'),
+      svgInternalStyles: document.getElementById('svgInternalStyles'),
+      
+      // Controls
+      btnGenerate: document.getElementById('btnGenerate'),
+      btnSolve: document.getElementById('btnSolve'),
+      sliderSize: document.getElementById('sliderSize'),
+      valSize: document.getElementById('valSize'),
+      sliderSpeed: document.getElementById('sliderSpeed'),
+      valSpeed: document.getElementById('valSpeed'),
+      sliderBranch: document.getElementById('sliderBranch'),
+      valBranch: document.getElementById('valBranch'),
+      selectTheme: document.getElementById('selectTheme'),
+      statusText: document.getElementById('statusText'),
+      
+      // D-Pad
+      btnUp: document.getElementById('btnUp'),
+      btnDown: document.getElementById('btnDown'),
+      btnLeft: document.getElementById('btnLeft'),
+      btnRight: document.getElementById('btnRight'),
+
+      // Toast
+      toast: document.getElementById('toast'),
+      toastMsg: document.getElementById('toastMsg'),
+      toastIcon: document.getElementById('toastIcon')
+    };
+
+    /* ==========================================================================
+       5. INITIALIZATION & EVENT LISTENERS
+       ========================================================================== */
+    function init() {
+      setupEventListeners();
+      applyTheme('cyberpunk');
+      updateGridSize(parseInt(dom.sliderSize.value, 10));
+      generateMaze();
+    }
+
+    function setupEventListeners() {
+      // Buttons
+      dom.btnGenerate.addEventListener('click', () => generateMaze());
+      dom.btnSolve.addEventListener('click', () => solveMaze());
+
+      // Sliders
+      dom.sliderSize.addEventListener('input', (e) => {
+        const val = parseInt(e.target.value, 10);
+        dom.valSize.textContent = `${val} x ${val}`;
+        updateGridSize(val);
+      });
+      dom.sliderSize.addEventListener('change', () => generateMaze());
+
+      dom.sliderSpeed.addEventListener('input', (e) => {
+        const val = parseInt(e.target.value, 10);
+        updateSpeed(val);
+      });
+
+      dom.sliderBranch.addEventListener('input', (e) => {
+        const val = parseInt(e.target.value, 10);
+        state.splittingChance = val / 100;
+        dom.valBranch.textContent = `${val}%`;
+      });
+
+      // Theme
+      dom.selectTheme.addEventListener('change', (e) => {
+        applyTheme(e.target.value);
+      });
+
+      // Keyboard Controls
+      window.addEventListener('keydown', handleKeyPress);
+
+      // On-screen D-Pad
+      dom.btnUp.addEventListener('click', () => movePlayer(0, -1));
+      dom.btnDown.addEventListener('click', () => movePlayer(0, 1));
+      dom.btnLeft.addEventListener('click', () => movePlayer(-1, 0));
+      dom.btnRight.addEventListener('click', () => movePlayer(1, 0));
+    }
+
+    /* ==========================================================================
+       6. THEME & GRID HELPER FUNCTIONS
+       ========================================================================== */
+    function applyTheme(themeKey) {
+      const theme = THEMES[themeKey] || THEMES.cyberpunk;
+      const root = document.documentElement;
+
+      root.style.setProperty('--maze-bg-color', theme.bg);
+      root.style.setProperty('--maze-stroke-color', theme.stroke);
+      root.style.setProperty('--maze-path-color', theme.path);
+      root.style.setProperty('--player-color', theme.player);
+      root.style.setProperty('--solution-color', theme.solution);
+      
+      // Update SVG Internal CSS
+      const strokeWidth = state.strokeWidth;
+      dom.svgInternalStyles.textContent = `
+        g {
+          --cell-size: ${state.scale}px;
+          --stroke-width: ${strokeWidth}px;
+        }
+        .grid-line {
+          fill: none;
+          stroke: ${theme.stroke};
+          stroke-width: ${strokeWidth}px;
+          stroke-linecap: square;
+        }
+        .maze-path {
+          fill: none;
+          stroke: ${theme.path};
+          stroke-width: calc(var(--cell-size) - ${strokeWidth}px);
+          stroke-linecap: square;
+          stroke-linejoin: square;
+        }
+      `;
+    }
+
+    function updateGridSize(size) {
+      state.gridWidth = size;
+      state.gridHeight = size;
+      state.endPoint = { x: size - 1, y: Random.int(0, size - 1) };
+    }
+
+    function updateSpeed(val) {
+      // Map 1-100 to interval delay (100ms down to 1ms)
+      state.animationSpeedMs = Math.max(1, Math.floor(100 - (val * 0.95)));
+      let label = 'Medium';
+      if (val > 75) label = 'Very Fast';
+      else if (val > 50) label = 'Fast';
+      else if (val < 25) label = 'Slow';
+      dom.valSpeed.textContent = label;
+    }
+
+    function buildFreshGrid() {
+      return new Array(state.gridHeight).fill(null).map(
+        () => new Array(state.gridWidth).fill(0)
+      );
+    }
+
+    /* ==========================================================================
+       7. SVG RENDERING FUNCTIONS
+       ========================================================================== */
+    function renderGridBackground() {
+      let gridMarkup = '';
+      const w = state.gridWidth * state.scale;
+      const h = state.gridHeight * state.scale;
+
+      for (let y = 0; y <= state.gridHeight; y++) {
+        const yPos = y * state.scale;
+        gridMarkup += `<line class="grid-line" x1="0" x2="${w}" y1="${yPos}" y2="${yPos}" />`;
+      }
+      for (let x = 0; x <= state.gridWidth; x++) {
+        const xPos = x * state.scale;
+        gridMarkup += `<line class="grid-line" x1="${xPos}" x2="${xPos}" y1="0" y2="${h}" />`;
+      }
+
+      dom.gridGroup.innerHTML = gridMarkup;
+    }
+
+    function adjustMazePoint(point) {
+      return {
+        x: state.scale / 2 + point.x * state.scale,
+        y: state.scale / 2 + point.y * state.scale
+      };
+    }
+
+    function buildPathData(points) {
+      if (!points || points.length === 0) return '';
+      const adjusted = points.map(adjustMazePoint);
+      const first = adjusted[0];
+
+      let commands = [`M ${first.x},${first.y}`];
+      for (let i = 1; i < adjusted.length; i++) {
+        commands.push(`L ${adjusted[i].x},${adjusted[i].y}`);
+      }
+      return commands.join(' ');
+    }
+
+    function drawLine(points, className = '') {
+      if (points.length < 2) return '';
+      return `<path class="maze-path ${className}" d="${buildPathData(points)}" />`;
+    }
+
+    function drawLines() {
+      let markup = '';
+      markup += state.otherPaths.map(p => drawLine(p, 'branch')).join('');
+      markup += drawLine(state.mainPathPoints, 'main');
+      dom.patternGroup.innerHTML = markup;
+    }
+
+    function renderMarkers() {
+      const startAdj = adjustMazePoint(state.startPoint);
+      const endAdj = adjustMazePoint(state.endPoint);
+      const playerAdj = adjustMazePoint(state.playerPos);
+      const radius = state.scale * 0.28;
+
+      let markup = `
+        <!-- Start Marker -->
+        <circle class="start-marker" cx="${startAdj.x}" cy="${startAdj.y}" r="${radius}" />
+        <text x="${startAdj.x}" y="${startAdj.y + 4}" text-anchor="middle" fill="white" font-size="10" font-weight="bold">S</text>
+        
+        <!-- End Marker -->
+        <circle class="end-marker" cx="${endAdj.x}" cy="${endAdj.y}" r="${radius}" />
+        <text x="${endAdj.x}" y="${endAdj.y + 4}" text-anchor="middle" fill="white" font-size="10" font-weight="bold">E</text>
+
+        <!-- Player Marker -->
+        <circle id="playerSvgMarker" class="player-marker" cx="${playerAdj.x}" cy="${playerAdj.y}" r="${radius * 0.9}" />
+      `;
+
+      dom.markersGroup.innerHTML = markup;
+    }
+
+    /* ==========================================================================
+       8. MAZE GENERATION ALGORITHM
+       ========================================================================== */
+    function mainPathStartPoints() {
+      const yStart = Random.int(0, state.gridHeight - 1);
+      state.startPoint = { x: 0, y: yStart };
+      
+      return [
+        { x: -1, y: yStart },
+        { x: 0, y: yStart }
+      ];
+    }
+
+    function markPointAsTaken(point, value = 1) {
+      if (point.x >= 0 && point.x < state.gridWidth && point.y >= 0 && point.y < state.gridHeight) {
+        state.gridData[point.y][point.x] = value;
+      }
+    }
+
+    function findNextPoint(point) {
+      const potential = [];
+      const { x, y } = point;
+
+      if (y > 0 && state.gridData[y - 1][x] === 0) potential.push({ x, y: y - 1 });
+      if (y < state.gridHeight - 1 && state.gridData[y + 1][x] === 0) potential.push({ x, y: y + 1 });
+      if (x > 0 && state.gridData[y][x - 1] === 0) potential.push({ x: x - 1, y });
+      if (x < state.gridWidth - 1 && state.gridData[y][x + 1] === 0) potential.push({ x: x + 1, y });
+
+      if (potential.length === 0) return undefined;
+      return Random.item(potential);
+    }
+
+    function refreshState() {
+      state.mainPathPoints = mainPathStartPoints();
+      state.gridData = buildFreshGrid();
+      markPointAsTaken(state.mainPathPoints.at(-1));
+      state.otherPaths = [];
+      state.failedCount = 0;
+      state.solutionPath = [];
+      dom.solutionGroup.innerHTML = '';
+    }
+
+    function generateMaze() {
+      if (state.isGenerating) clearInterval(state.intervalId);
+
+      state.isGenerating = true;
+      state.isGameWon = false;
+      dom.statusText.textContent = "Generating Maze...";
+      dom.btnGenerate.disabled = true;
+      dom.btnSolve.disabled = true;
+
+      refreshState();
+
+      // Configure SVG viewport
+      const mazeWidth = state.gridWidth * state.scale;
+      const mazeHeight = state.gridHeight * state.scale;
+      dom.svg.setAttribute('viewBox', `0 0 ${mazeWidth} ${mazeHeight}`);
+      
+      renderGridBackground();
+      applyTheme(dom.selectTheme.value);
+
+      buildMainPath();
+    }
+
+    function buildMainPath() {
+      drawLines();
+
+      state.intervalId = setInterval(() => {
+        const lastPoint = state.mainPathPoints.at(-1);
+        const nextPoint = findNextPoint(lastPoint);
+
+        if (!nextPoint) {
+          if (state.failedCount > state.retryLimit) {
+            refreshState(); 
+          } else {
+            state.failedCount++;
+            for (let i = 0; i < state.failedCount; i++) {
+              if (state.mainPathPoints.length > 2) {
+                const removed = state.mainPathPoints.pop();
+                markPointAsTaken(removed, 0);
+              }
+            }
+          }
+        } else {
+          state.mainPathPoints.push(nextPoint);
+          markPointAsTaken(nextPoint);
+
+          // Check if reached exit boundary
+          if (nextPoint.x === state.gridWidth - 1) {
+            state.endPoint = { x: nextPoint.x, y: nextPoint.y };
+            state.mainPathPoints.push({ x: nextPoint.x + 1, y: nextPoint.y });
+            
+            clearInterval(state.intervalId);
+            buildOtherPaths();
+          }
+        }
+
+        drawLines();
+      }, state.animationSpeedMs);
+    }
+
+    function addMorePaths() {
+      state.gridData.forEach((row, y) => {
+        row.forEach((cell, x) => {
+          if (cell === 1 && Random.chance(state.splittingChance)) {
+            state.otherPaths.push([{ x, y }]);
+          }
+        });
+      });
+    }
+
+    function isMazeComplete() {
+      return state.gridData.flat().every(cell => cell === 1);
+    }
+
+    function buildOtherPaths() {
+      state.intervalId = setInterval(() => {
+        addMorePaths();
+
+        state.otherPaths.forEach((path) => {
+          const nextPoint = findNextPoint(path.at(-1));
+          if (nextPoint) {
+            path.push(nextPoint);
+            markPointAsTaken(nextPoint);
+          }
+        });
+
+        drawLines();
+
+        if (isMazeComplete()) {
+          clearInterval(state.intervalId);
+          state.isGenerating = false;
+          dom.btnGenerate.disabled = false;
+          dom.btnSolve.disabled = false;
+          dom.statusText.textContent = "Ready to Play!";
+
+          // Reset Player to Start
+          state.playerPos = { ...state.startPoint };
+          renderMarkers();
+          showToast("Maze Generated Successfully!", "fa-circle-check", "text-emerald-400");
+        }
+      }, state.animationSpeedMs);
+    }
+
+    /* ==========================================================================
+       9. MAZE SOLVER (A* / BFS PATHFINDING)
+       ========================================================================== */
+    function solveMaze() {
+      if (state.isGenerating || state.isSolving) return;
+
+      state.isSolving = true;
+      dom.statusText.textContent = "Solving Maze...";
+      
+      const adjacency = buildAdjacencyGraph();
+      const startKey = `${state.startPoint.x},${state.startPoint.y}`;
+      const endKey = `${state.endPoint.x},${state.endPoint.y}`;
+
+      // BFS Algorithm to find shortest path
+      const queue = [[startKey]];
+      const visited = new Set([startKey]);
+      let foundPathKeys = null;
+
+      while (queue.length > 0) {
+        const path = queue.shift();
+        const node = path[path.length - 1];
+
+        if (node === endKey) {
+          foundPathKeys = path;
+          break;
+        }
+
+        const neighbors = adjacency[node] || [];
+        for (const neighbor of neighbors) {
+          if (!visited.has(neighbor)) {
+            visited.add(neighbor);
+            queue.push([...path, neighbor]);
+          }
+        }
+      }
+
+      if (foundPathKeys) {
+        state.solutionPath = foundPathKeys.map(k => {
+          const [x, y] = k.split(',').map(Number);
+          return { x, y };
+        });
+
+        // Add visual entrance & exit extensions
+        const startExt = { x: -1, y: state.startPoint.y };
+        const endExt = { x: state.endPoint.x + 1, y: state.endPoint.y };
+        const fullSolution = [startExt, ...state.solutionPath, endExt];
+
+        // Animate Solution Line
+        animateSolutionPath(fullSolution);
+      } else {
+        showToast("No path found!", "fa-circle-exclamation", "text-rose-400");
+        state.isSolving = false;
+      }
+    }
+
+    function buildAdjacencyGraph() {
+      const adj = {};
+
+      const addEdge = (p1, p2) => {
+        const k1 = `${p1.x},${p1.y}`;
+        const k2 = `${p2.x},${p2.y}`;
+        if (!adj[k1]) adj[k1] = [];
+        if (!adj[k2]) adj[k2] = [];
+        if (!adj[k1].includes(k2)) adj[k1].push(k2);
+        if (!adj[k2].includes(k1)) adj[k2].push(k1);
+      };
+
+      const processPath = (pts) => {
+        for (let i = 0; i < pts.length - 1; i++) {
+          const p1 = pts[i];
+          const p2 = pts[i + 1];
+          // Skip entrance/exit offsets outside grid
+          if (p1.x >= 0 && p1.x < state.gridWidth && p2.x >= 0 && p2.x < state.gridWidth) {
+            addEdge(p1, p2);
+          }
+        }
+      };
+
+      processPath(state.mainPathPoints);
+      state.otherPaths.forEach(processPath);
+
+      return adj;
+    }
+
+    function animateSolutionPath(fullPath) {
+      let currentIdx = 1;
+      dom.solutionGroup.innerHTML = '';
+
+      const interval = setInterval(() => {
+        const subPath = fullPath.slice(0, currentIdx + 1);
+        const pathData = buildPathData(subPath);
+        
+        dom.solutionGroup.innerHTML = `
+          <path class="solution-path" d="${pathData}" stroke-width="${state.scale * 0.25}" />
+        `;
+
+        currentIdx++;
+        if (currentIdx >= fullPath.length) {
+          clearInterval(interval);
+          state.isSolving = false;
+          dom.statusText.textContent = "Solution Computed!";
+          showToast("Maze Solved Successfully!", "fa-wand-magic-sparkles", "text-emerald-400");
+        }
+      }, Math.max(15, state.animationSpeedMs));
+    }
+
+    /* ==========================================================================
+       10. PLAYER NAVIGATION & GAME LOGIC
+       ========================================================================== */
+    function movePlayer(dx, dy) {
+      if (state.isGenerating || state.isGameWon) return;
+
+      const newPos = { x: state.playerPos.x + dx, y: state.playerPos.y + dy };
+
+      // Check if path exists between current cell and next cell
+      if (canMoveTo(state.playerPos, newPos)) {
+        state.playerPos = newPos;
+        renderMarkers();
+
+        // Check Win Condition
+        if (state.playerPos.x === state.endPoint.x && state.playerPos.y === state.endPoint.y) {
+          state.isGameWon = true;
+          showToast("🎉 Victory! You escaped the maze!", "fa-trophy", "text-amber-400");
+          dom.statusText.textContent = "Maze Escaped!";
+        }
+      }
+    }
+
+    function canMoveTo(from, to) {
+      if (to.x < 0 || to.x >= state.gridWidth || to.y < 0 || to.y >= state.gridHeight) {
+        return false;
+      }
+
+      // Check graph connection
+      const adjacency = buildAdjacencyGraph();
+      const fromKey = `${from.x},${from.y}`;
+      const toKey = `${to.x},${to.y}`;
+
+      return adjacency[fromKey] && adjacency[fromKey].includes(toKey);
+    }
+
+    function handleKeyPress(e) {
+      switch (e.key) {
+        case 'ArrowUp': case 'w': case 'W':
+          e.preventDefault(); movePlayer(0, -1); break;
+        case 'ArrowDown': case 's': case 'S':
+          e.preventDefault(); movePlayer(0, 1); break;
+        case 'ArrowLeft': case 'a': case 'A':
+          e.preventDefault(); movePlayer(-1, 0); break;
+        case 'ArrowRight': case 'd': case 'D':
+          e.preventDefault(); movePlayer(1, 0); break;
+      }
+    }
+
+    /* ==========================================================================
+       11. UI TOAST NOTIFICATION
+       ========================================================================== */
+    function showToast(message, iconClass, colorClass) {
+      dom.toastMsg.textContent = message;
+      dom.toastIcon.className = `fa-solid ${iconClass} ${colorClass} text-lg`;
+      
+      dom.toast.classList.remove('opacity-0', 'translate-y-[-10px]');
+      dom.toast.classList.add('opacity-100', 'translate-y-0');
+
+      setTimeout(() => {
+        dom.toast.classList.remove('opacity-100', 'translate-y-0');
+        dom.toast.classList.add('opacity-0', 'translate-y-[-10px]');
+      }, 3000);
+    }
+
+    // Initialize application when DOM is ready
+    window.onload = init;
+  </script>
+</body>
+</html>
